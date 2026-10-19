@@ -1,12 +1,12 @@
 {
-  "name": "Todo",
-  "short_name": "Todo",
-  "description": "Plan your day and finish your tasks on time.",
+  "name": "Sundial",
+  "short_name": "Sundial",
+  "description": "A to-do list laid out along the sun's path, so you always know what's next and how much of the day is left.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#F6F6FA",
-  "theme_color": "#4F46E5",
+  "background_color": "#17143A",
+  "theme_color": "#2E2B6E",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
