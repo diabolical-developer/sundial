@@ -34,6 +34,18 @@ const light = {
   panelInk: '#FFFFFF',
   panelMuted: '#B4B0E2',
   backdrop: 'rgba(14, 11, 46, 0.42)',
+  /** Second stop of the "up next" card's gradient. */
+  panelEdge: '#3A2E9E',
+  /** Lifts cards off the page: a soft shadow in light mode, a faint rim in dark mode. */
+  raised: {
+    shadowColor: '#2A2370',
+    shadowOpacity: 0.07,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+    borderWidth: 0,
+    borderColor: 'transparent',
+  },
 };
 
 const dark: typeof light = {
@@ -57,6 +69,16 @@ const dark: typeof light = {
   panelInk: '#FFFFFF',
   panelMuted: '#C2BDF0',
   backdrop: 'rgba(3, 2, 16, 0.6)',
+  panelEdge: '#4A3CB8',
+  raised: {
+    shadowColor: '#000000',
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
 };
 
 export type Theme = typeof light;
@@ -76,28 +98,64 @@ type Sky = {
   locations: readonly [number, number, number, number];
   /** Colour of the sun's path and horizon, chosen for the lower sky. */
   arc: string;
+  /** Far range, middle hills, near treeline: far ones fade toward the sky (atmospheric perspective). */
+  land: readonly [string, string, string];
+  /** Light pooling on the horizon behind the mountains. */
+  glow: string;
+  /** Text and lines drawn over the mountains. */
+  onHills: string;
+  /** How many of the stars show (0 to 1). */
+  stars: number;
+  /** Lit tops and shaded undersides of clouds, or null for a clear sky. */
+  clouds: readonly [string, string] | null;
+  /** The sun low in the sky is warmer: its bloom colour. */
+  sunGlow: string;
 };
 
 export const SKY: Record<Phase, Sky> = {
   dawn: {
-    colors: ['#2E2B6E', '#7A4E9C', '#F08F8A', '#FFD9B0'],
-    locations: [0, 0.38, 0.78, 1],
+    colors: ['#1C2556', '#5B4C8F', '#E0898C', '#FFD2A1'],
+    locations: [0, 0.42, 0.8, 1],
     arc: '#3A2D75',
+    land: ['#A57A9C', '#634A7A', '#2C2346'],
+    glow: '#FFD9A8',
+    onHills: 'rgba(255,255,255,0.88)',
+    stars: 0.35,
+    clouds: ['#FFE6D6', '#B47C98'],
+    sunGlow: '#FFB46A',
   },
   day: {
-    colors: ['#1C4FD8', '#3A78F0', '#8CC2FF', '#DCEDFF'],
+    colors: ['#1F5FD0', '#4A8FEA', '#97C6F7', '#DCEEFF'],
     locations: [0, 0.4, 0.8, 1],
     arc: '#123A9A',
+    land: ['#9CB8DC', '#5E87AA', '#284F55'],
+    glow: '#FFFFFF',
+    onHills: 'rgba(255,255,255,0.94)',
+    stars: 0,
+    clouds: ['#FFFFFF', '#A9C2E2'],
+    sunGlow: '#FFE9A8',
   },
   dusk: {
-    colors: ['#241752', '#6B347F', '#E0606A', '#FFB168'],
-    locations: [0, 0.4, 0.8, 1],
+    colors: ['#1B1340', '#55306F', '#C9587A', '#FFA868'],
+    locations: [0, 0.42, 0.8, 1],
     arc: '#2A1757',
+    land: ['#A65C7E', '#5C2F60', '#261434'],
+    glow: '#FFC07A',
+    onHills: 'rgba(255,255,255,0.88)',
+    stars: 0.25,
+    clouds: ['#FFC9A6', '#8E4A78'],
+    sunGlow: '#FF9A50',
   },
   night: {
-    colors: ['#060A22', '#0F1640', '#1D2463', '#33378A'],
+    colors: ['#03071C', '#0A1236', '#18245E', '#2B3678'],
     locations: [0, 0.4, 0.8, 1],
     arc: '#C9CCFF',
+    land: ['#222E68', '#151D4A', '#0A0F2E'],
+    glow: '#5F6BE0',
+    onHills: 'rgba(214,216,255,0.8)',
+    stars: 1,
+    clouds: null,
+    sunGlow: '#C9CCFF',
   },
 };
 

@@ -14,7 +14,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, G, Line } from 'react-native-svg';
 
 import { haptic } from '../haptics';
 import { useStore } from '../store';
@@ -22,8 +22,9 @@ import { F } from '../theme';
 import { formatTime, toTime } from '../time';
 import type { Task } from '../types';
 import { Icon } from '../ui/Icon';
-import { EASE_IN_OUT } from '../ui/motion';
+import { EASE_IN_OUT, loop } from '../ui/motion';
 import { PressableScale } from '../ui/PressableScale';
+import { SkyScene } from './SkyScene';
 
 const LENGTHS = [15, 25, 45, 60];
 const SOL = '#FFC21A';
@@ -191,6 +192,10 @@ export function FocusMode({ taskId, onClose }: Props) {
       accessibilityViewIsModal
     >
       <LinearGradient colors={['#090726', '#191458', '#352682']} locations={[0, 0.55, 1]} style={StyleSheet.absoluteFill} />
+      {/* Stars keep you company while you work. */}
+      <View style={[StyleSheet.absoluteFill, { opacity: 0.7 }]} pointerEvents="none">
+        <SkyScene phase="night" ground="#352682" bare />
+      </View>
 
       <View style={[styles.top, { paddingTop: insets.top + 12 }]}>
         <Text style={styles.kicker}>Focus</Text>
@@ -213,9 +218,40 @@ export function FocusMode({ taskId, onClose }: Props) {
               />
             ))}
           </Animated.View>
+          {finished && (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.finishRing,
+                { width: size, height: size, borderRadius: size },
+                loop(reduceMotion, { from: { transform: [{ scale: 1 }], opacity: 0.7 }, to: { transform: [{ scale: 1.35 }], opacity: 0 } }, 1600, { linear: true }),
+              ]}
+            />
+          )}
           <View style={[styles.disc, { width: size - stroke * 2, height: size - stroke * 2, borderRadius: size }]} />
           <Svg width={size} height={size} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
             <Circle cx={size / 2} cy={size / 2} r={r} stroke="rgba(255,255,255,0.12)" strokeWidth={stroke} fill="none" />
+            {/* A tick for every minute of the session, every fifth one longer. */}
+            <G stroke="#FFFFFF">
+              {Array.from({ length: Math.min(length, 60) }, (_, i) => {
+                const a = (i / Math.min(length, 60)) * Math.PI * 2;
+                const major = i % 5 === 0;
+                const r1 = r - stroke / 2 - (major ? 11 : 8);
+                const r2 = r - stroke / 2 - 4;
+                return (
+                  <Line
+                    key={i}
+                    x1={size / 2 + Math.cos(a) * r1}
+                    y1={size / 2 + Math.sin(a) * r1}
+                    x2={size / 2 + Math.cos(a) * r2}
+                    y2={size / 2 + Math.sin(a) * r2}
+                    strokeOpacity={i / Math.min(length, 60) < progress ? 0.6 : major ? 0.28 : 0.14}
+                    strokeWidth={major ? 2 : 1.2}
+                    strokeLinecap="round"
+                  />
+                );
+              })}
+            </G>
             {progress > 0.0005 && (
               <Circle
                 cx={size / 2}
@@ -228,6 +264,12 @@ export function FocusMode({ taskId, onClose }: Props) {
                 strokeDasharray={`${c} ${c}`}
                 strokeDashoffset={c * (1 - progress)}
               />
+            )}
+            {progress > 0.0005 && progress < 0.9995 && (
+              <G>
+                <Circle cx={size / 2 + Math.cos(progress * Math.PI * 2) * r} cy={size / 2 + Math.sin(progress * Math.PI * 2) * r} r={stroke * 1.3} fill={SOL} fillOpacity={0.3} />
+                <Circle cx={size / 2 + Math.cos(progress * Math.PI * 2) * r} cy={size / 2 + Math.sin(progress * Math.PI * 2) * r} r={stroke * 0.75} fill="#FFF4C8" />
+              </G>
             )}
           </Svg>
           <Text style={styles.clock} accessibilityRole="timer" accessibilityLabel={`${mmss(remaining)} remaining`}>
@@ -303,6 +345,7 @@ const styles = StyleSheet.create({
   glowWrap: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
   glowSoft: (Platform.OS === 'web' ? { filter: 'blur(28px)' } : {}) as object,
   disc: { position: 'absolute', backgroundColor: '#120E43' },
+  finishRing: { position: 'absolute', borderWidth: 3, borderColor: SOL },
   clock: { fontFamily: F.display, fontSize: 64, letterSpacing: -2, color: '#FFFFFF', fontVariant: ['tabular-nums'] },
   under: { fontFamily: F.medium, fontSize: 14, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
   lengths: { flexDirection: 'row', gap: 8, marginTop: 30 },

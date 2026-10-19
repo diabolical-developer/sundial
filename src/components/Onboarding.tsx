@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import Animated, {
@@ -18,12 +17,24 @@ import Svg, { Path } from 'react-native-svg';
 import { haptic } from '../haptics';
 import { useStore } from '../store';
 import { F, SKY, useTheme } from '../theme';
-import { addDays } from '../time';
+import { addDays, nowMinutes, toTime } from '../time';
 import { Icon } from '../ui/Icon';
 import { EASE_OUT } from '../ui/motion';
 import { PressableScale } from '../ui/PressableScale';
+import { clockNow } from '../useNow';
+import { Hills, SkyScene } from './SkyScene';
+import { Sun } from './SunArc';
 
-/** First launch: the sun comes up, you say your name, and three example tasks show how it works. */
+const FEATURES = [
+  { icon: 'sun' as const, text: 'Tasks sit on the sun’s path' },
+  { icon: 'repeat' as const, text: 'Repeats and reminders' },
+  { icon: 'flame' as const, text: 'Streaks for clear days' },
+];
+
+/**
+ * First launch: night turns to dawn as the sun climbs over the hills, you say your name,
+ * and three example tasks show how it works.
+ */
 export function Onboarding() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -34,68 +45,109 @@ export function Onboarding() {
 
   const rise = useSharedValue(reduceMotion ? 1 : 0);
   useEffect(() => {
-    if (!reduceMotion) rise.value = withDelay(250, withTiming(1, { duration: 2000, easing: EASE_OUT }));
+    if (!reduceMotion) rise.value = withDelay(300, withTiming(1, { duration: 2600, easing: EASE_OUT }));
   }, [reduceMotion, rise]);
+  const arcW = Math.min(width, 560) - 56;
+  const arcH = arcW * 0.42;
+  const sunSize = 170;
   const sun = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(rise.value, [0, 1], [150, 0]) }],
-    opacity: interpolate(rise.value, [0, 0.15], [0, 1]),
+    transform: [
+      { translateY: interpolate(rise.value, [0, 1], [arcH + sunSize * 0.6, 0]) },
+      { scale: interpolate(rise.value, [0, 1], [0.8, 1]) },
+    ],
   }));
+  // The night sky fades as the sun comes up.
+  const night = useAnimatedStyle(() => ({ opacity: interpolate(rise.value, [0, 0.75], [1, 0], 'clamp') }));
+  const trail = useAnimatedStyle(() => ({ opacity: interpolate(rise.value, [0.55, 1], [0, 1], 'clamp') }));
 
   const begin = () => {
     haptic.success();
     if (tasks.length === 0) {
-      const hour = new Date().getHours();
-      const soon = Math.min(20, Math.max(9, hour + 1));
-      const lateDate = hour < 21 ? today : addDays(today, 1);
-      addTask({ title: 'Plan tomorrow’s top three', date: lateDate, time: hour < 21 ? '21:00' : '09:00', priority: 'normal', reminder: false });
+      // Hours on the planning-day clock, so onboarding at 1 am still plans "tonight".
+      const hour = Math.floor(nowMinutes(clockNow()) / 60);
+      const soon = toTime(Math.max(9, hour + 1) * 60);
+      const evening = hour < 21;
+      addTask({ title: 'Plan tomorrow’s top three', date: evening ? today : addDays(today, 1), time: evening ? '21:00' : '09:00', priority: 'normal', reminder: false });
       addTask({ title: 'Swipe right to finish me, or left to delete', date: today, time: null, priority: 'low', reminder: false });
-      addTask({ title: 'Tap me for details, or press Start focus', date: today, time: `${String(soon).padStart(2, '0')}:00`, priority: 'high', reminder: false });
+      addTask({ title: 'Tap me for details, or press Start focus', date: today, time: soon, priority: 'high', reminder: false });
     }
     updateSettings({ onboarded: true, name: name.trim().slice(0, 24) });
   };
 
-  const arcW = Math.min(width, 560) - 64;
-  const arcH = arcW * 0.42;
-
   return (
     <Animated.View entering={FadeIn.duration(300)} exiting={FadeOut.duration(300)} style={[styles.root, { backgroundColor: t.card }]}>
       <View style={[styles.sky, { paddingTop: insets.top + 28 }]}>
-        <LinearGradient colors={SKY.dawn.colors} locations={SKY.dawn.locations} style={StyleSheet.absoluteFill} />
-        <Animated.Text entering={FadeInDown.delay(500).duration(700)} style={[styles.brand, { top: insets.top + 20 }]}>
-          Sundial
-        </Animated.Text>
-        <Animated.Text entering={FadeInDown.delay(700).duration(700)} style={styles.headline}>
-          Your day,{'\n'}laid out in daylight.
-        </Animated.Text>
+        <SkyScene phase="dawn" ground={t.card} bare />
+        <Animated.View style={[StyleSheet.absoluteFill, night]} pointerEvents="none">
+          <SkyScene phase="night" ground={t.card} bare />
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(400).duration(700)} style={[styles.brandRow, { top: insets.top + 18 }]}>
+          <View style={styles.brandMark}>
+            <Icon name="sun" size={14} color="#17143A" strokeWidth={2.6} />
+          </View>
+          <Text style={styles.brand}>Sundial</Text>
+        </Animated.View>
+
+        <View style={styles.headlineWrap}>
+          <Animated.Text entering={FadeInDown.delay(650).springify().damping(18)} style={styles.headline}>
+            Your day,
+          </Animated.Text>
+          <Animated.Text entering={FadeInDown.delay(800).springify().damping(18)} style={[styles.headline, styles.headlineAccent]}>
+            laid out in daylight.
+          </Animated.Text>
+        </View>
 
         <View style={[styles.horizon, { width: arcW, height: arcH }]}>
           <Svg width={arcW} height={arcH} style={StyleSheet.absoluteFill}>
             <Path
               d={`M 4 ${arcH} A ${arcW / 2 - 4} ${arcH - 8} 0 0 1 ${arcW - 4} ${arcH}`}
-              stroke={SKY.dawn.arc}
-              strokeOpacity={0.55}
+              stroke="#FFFFFF"
+              strokeOpacity={0.45}
               strokeWidth={1.5}
-              strokeDasharray="3 6"
+              strokeDasharray="2 7"
+              strokeLinecap="round"
               fill="none"
             />
           </Svg>
-          <View style={styles.sunClip}>
-            <Animated.View style={[styles.sun, sun]}>
-              <View style={[styles.glow, { width: 120, height: 120, opacity: 0.25 }]} />
-              <View style={[styles.glow, { width: 84, height: 84, opacity: 0.45 }]} />
-              <View style={styles.core} />
+          <Animated.View style={[StyleSheet.absoluteFill, trail]}>
+            <Svg width={arcW} height={arcH}>
+              <Path
+                d={`M 4 ${arcH} A ${arcW / 2 - 4} ${arcH - 8} 0 0 1 ${arcW / 2} 8`}
+                stroke="#FFFFFF"
+                strokeOpacity={0.9}
+                strokeWidth={2.5}
+                strokeLinecap="round"
+                fill="none"
+              />
+            </Svg>
+          </Animated.View>
+          <View style={[styles.sunClip, { height: arcH + sunSize / 2 }]}>
+            <Animated.View style={[{ position: 'absolute', top: 8, width: sunSize, height: sunSize }, sun]}>
+              <Sun reduceMotion={reduceMotion} size={sunSize} glow={SKY.dawn.sunGlow} />
             </Animated.View>
           </View>
         </View>
+        <Hills phase="dawn" ground={t.card} height={110} />
       </View>
 
-      <Animated.View
-        entering={FadeInDown.delay(900).duration(600)}
-        style={[styles.sheet, { backgroundColor: t.card, paddingBottom: insets.bottom + 24 }]}
-      >
-        <Text style={[styles.body, { color: t.muted }]}>
-          Sundial puts today’s tasks on the sun’s path, so you always know what’s next and how much of the day is left.
-        </Text>
+      <Animated.View entering={FadeInDown.delay(1000).duration(600)} style={[styles.sheet, { paddingBottom: insets.bottom + 24 }]}>
+        <View style={styles.features}>
+          {FEATURES.map((f, i) => (
+            <Animated.View
+              key={f.text}
+              entering={reduceMotion ? undefined : FadeInDown.delay(1150 + i * 110).springify().damping(18)}
+              style={[styles.feature, { backgroundColor: t.bg }]}
+            >
+              <View style={[styles.featureIcon, { backgroundColor: t.irisSoft }]}>
+                <Icon name={f.icon} size={15} color={t.iris} strokeWidth={2.4} />
+              </View>
+              <Text style={[styles.featureText, { color: t.ink }]} numberOfLines={2}>
+                {f.text}
+              </Text>
+            </Animated.View>
+          ))}
+        </View>
         <TextInput
           value={name}
           onChangeText={setName}
@@ -118,36 +170,42 @@ export function Onboarding() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  sky: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden', paddingHorizontal: 28, paddingBottom: 28 },
-  brand: { fontFamily: F.displayBold, fontSize: 17, color: 'rgba(255,255,255,0.85)', position: 'absolute', left: 28 },
+  sky: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden', paddingHorizontal: 28, paddingBottom: 60 },
+  brandRow: { position: 'absolute', left: 28, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  brandMark: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#FFD34D', alignItems: 'center', justifyContent: 'center' },
+  brand: { fontFamily: F.displayBold, fontSize: 17, color: 'rgba(255,255,255,0.92)' },
+  headlineWrap: { alignSelf: 'stretch', maxWidth: 500, marginBottom: 44 },
   headline: {
     fontFamily: F.display,
     fontSize: 44,
-    lineHeight: 46,
+    lineHeight: 47,
     letterSpacing: -1.5,
     color: '#FFFFFF',
-    alignSelf: 'stretch',
-    maxWidth: 500,
-    marginBottom: 28,
+    textShadowColor: 'rgba(10, 8, 40, 0.2)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 14,
   },
+  headlineAccent: { color: '#FFE2B8' },
   horizon: { alignItems: 'center' },
-  sunClip: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 170, overflow: 'hidden', alignItems: 'center' },
-  sun: { position: 'absolute', bottom: 0, width: 120, height: 120, alignItems: 'center', justifyContent: 'center' },
-  glow: { position: 'absolute', borderRadius: 999, backgroundColor: '#FFD65A' },
-  core: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFD34D', borderWidth: 3, borderColor: '#FFF4C8' },
-  sheet: {
-    marginTop: -28,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingHorizontal: 24,
-    paddingTop: 28,
-    gap: 16,
-    width: '100%',
-    maxWidth: 560,
-    alignSelf: 'center',
-  },
-  body: { fontFamily: F.medium, fontSize: 16.5, lineHeight: 24 },
+  // Not clipped: the mountains in front hide the sun until it clears the ridge.
+  sunClip: { position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center' },
+  sheet: { paddingHorizontal: 24, paddingTop: 8, gap: 14, width: '100%', maxWidth: 560, alignSelf: 'center' },
+  features: { flexDirection: 'row', gap: 8 },
+  feature: { flex: 1, borderRadius: 16, padding: 10, gap: 8 },
+  featureIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  featureText: { fontFamily: F.semi, fontSize: 12.5, lineHeight: 16 },
   input: { fontFamily: F.semi, fontSize: 17, height: 56, borderRadius: 18, paddingHorizontal: 18 },
-  cta: { height: 58, borderRadius: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  cta: {
+    height: 58,
+    borderRadius: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    shadowColor: '#FFC21A',
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+  },
   ctaText: { fontFamily: F.bold, fontSize: 17 },
 });

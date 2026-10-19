@@ -21,7 +21,12 @@ interface Props {
   onClose: () => void;
 }
 
-const TOKEN_ICON: Record<'date' | 'time' | 'priority', IconName> = { date: 'calendar', time: 'clock', priority: 'arrowUp' };
+const TOKEN_ICON: Record<'date' | 'time' | 'priority' | 'repeat', IconName> = {
+  date: 'calendar',
+  time: 'clock',
+  priority: 'arrowUp',
+  repeat: 'repeat',
+};
 
 export function Composer({ visible, defaultDate, onClose }: Props) {
   const t = useTheme();
@@ -61,6 +66,7 @@ export function Composer({ visible, defaultDate, onClose }: Props) {
     time,
     priority: manual.priority ?? parsed.priority ?? 'normal',
     reminder: manual.reminder ?? (remindersSupported && time !== null),
+    repeat: manual.repeat !== undefined ? manual.repeat : (parsed.repeat ?? null),
   };
   const title = parsed.title;
   const where = schedule.date ? dayLabel(schedule.date, today) : 'Someday';
@@ -68,7 +74,7 @@ export function Composer({ visible, defaultDate, onClose }: Props) {
 
   const submit = (keepOpen: boolean) => {
     if (!title) return;
-    addTask({ title, ...schedule, reminder: schedule.reminder && schedule.date !== null });
+    addTask({ title, ...schedule, reminder: schedule.reminder && schedule.date !== null, repeat: schedule.date ? schedule.repeat : null });
     haptic.success();
     setText('');
     setManual({});
@@ -107,7 +113,7 @@ export function Composer({ visible, defaultDate, onClose }: Props) {
             </Animated.Text>
           ) : parsed.tokens.length === 0 ? (
             <Animated.Text key="hint" entering={FadeIn.duration(200)} style={[styles.hint, { color: t.muted }]}>
-              Type a day or time and we’ll set it, like “Gym tomorrow 7am” or “Pay rent friday !”
+              Type a day or time and we’ll set it, like “Gym every day 7am” or “Pay rent friday !”
             </Animated.Text>
           ) : (
             parsed.tokens.map((tok) => (

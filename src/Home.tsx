@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -20,13 +20,14 @@ import { NextUp } from './components/NextUp';
 import { ProgressRing } from './components/ProgressRing';
 import { Section } from './components/Section';
 import { SkyHero } from './components/SkyHero';
+import { StreakCalendar } from './components/StreakCalendar';
 import { TaskSheet } from './components/TaskSheet';
 import { Tabs } from './components/Tabs';
 import { Toast } from './components/Toast';
 import { doneView, nextUp, todayView, upcomingView } from './select';
 import { useStore } from './store';
 import { F, phaseAt, SKY, useTheme } from './theme';
-import { addDays, bucketOf, DAY_END, DAY_START, dayLabel, nowMinutes, toTime } from './time';
+import { addDays, bucketOf, DAY_START, dayLabel, nowMinutes, toTime } from './time';
 import type { Tab } from './types';
 import { UIContext, type UI } from './ui/UIContext';
 import { useNow } from './useNow';
@@ -42,6 +43,8 @@ export function Home() {
   const [composer, setComposer] = useState<{ open: boolean; date?: string | null }>({ open: false });
   const [openId, setOpenId] = useState<string | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const closeCalendar = useCallback(() => setCalendarOpen(false), []);
 
   const ui = useMemo<UI>(
     () => ({
@@ -51,9 +54,27 @@ export function Home() {
         setOpenId(null);
         setFocusId(id);
       },
+      calendar: () => setCalendarOpen(true),
     }),
     [],
   );
+
+  // Links from the home-screen widget: sundial://add, sundial://task/<id>, sundial://calendar
+  useEffect(() => {
+    const open = (url: string | null) => {
+      const m = url ? /^sundial:\/\/([a-z]+)(?:\/([\w-]+))?/i.exec(url) : null;
+      if (!m) return;
+      const [, what, id] = m;
+      if (what === 'add') ui.compose(today);
+      else if (what === 'calendar') ui.calendar();
+      else if (what === 'task' && id) ui.openTask(id);
+    };
+    Linking.getInitialURL().then(open).catch(() => {});
+    const sub = Linking.addEventListener('url', (e) => open(e.url));
+    return () => sub.remove();
+    // Only once; later links arrive through the listener.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const day = useMemo(() => todayView(tasks, today), [tasks, today]);
   const todays = useMemo(() => tasks.filter((x) => x.date === today), [tasks, today]);
@@ -77,7 +98,7 @@ export function Home() {
     return { opacity: p, transform: [{ translateY: (1 - p) * -12 }] };
   });
 
-  const currentBucket = nowMin >= DAY_START && nowMin < DAY_END ? bucketOf(toTime(nowMin)) : null;
+  const currentBucket = nowMin >= DAY_START ? bucketOf(toTime(nowMin)) : null;
   const sky = SKY[phaseAt(now)];
   const doneToday = todays.filter((x) => x.done).length;
   const leftToday = day.open.length;
@@ -94,7 +115,7 @@ export function Home() {
           contentContainerStyle={{ paddingBottom: insets.bottom + 132 }}
         >
           <View onLayout={(e) => (heroH.value = e.nativeEvent.layout.height)}>
-            <SkyHero now={now} today={today} todays={todays} streak={streak} name={settings.name} scrollY={scrollY} />
+            <SkyHero now={now} today={today} todays={todays} streak={streak} name={settings.name} scrollY={scrollY} nextId={next?.id} />
           </View>
 
           <View style={[styles.sheet, { backgroundColor: t.bg }]}>
@@ -149,6 +170,7 @@ export function Home() {
                   )}
                   {upcoming.dated.size === 0 && upcoming.someday.length === 0 && (
                     <EmptyState
+                      scene="horizon"
                       title="Nothing on the horizon"
                       body="Add a task and pick a day, or just type it, like “Dentist next week” or “Call Sam friday 5pm”."
                     />
@@ -166,7 +188,7 @@ export function Home() {
                       <Text style={[styles.clearText, { color: t.ember }]}>Clear finished tasks</Text>
                     </Pressable>
                   ) : (
-                    <EmptyState title="No finished tasks yet" body="Tick a task off and it moves here, so you can see what you got done." />
+                    <EmptyState scene="night" title="No finished tasks yet" body="Tick a task off and it moves here, so you can see what you got done." />
                   )}
                 </View>
               )}
@@ -175,7 +197,8 @@ export function Home() {
         </Animated.ScrollView>
 
         <Animated.View pointerEvents="none" style={[styles.compact, { paddingTop: insets.top }, compact]}>
-          <LinearGradient colors={[sky.colors[0], sky.colors[1]]} style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={[sky.colors[0], sky.colors[1]]} style={[StyleSheet.absoluteFill, styles.frost]} />
+          <View style={styles.compactEdge} />
           <View style={styles.compactRow}>
             <Text style={styles.compactTitle}>Today</Text>
             <View style={styles.compactRight}>
@@ -198,6 +221,7 @@ export function Home() {
         <Composer visible={composer.open} defaultDate={composer.date} onClose={() => setComposer((c) => ({ ...c, open: false }))} />
         <TaskSheet taskId={openId} onClose={() => setOpenId(null)} />
         <FocusMode taskId={focusId} onClose={() => setFocusId(null)} />
+        {calendarOpen && <StreakCalendar onClose={closeCalendar} />}
         <Confetti trigger={celebration} />
         <StatusBar style="light" />
       </View>
@@ -207,12 +231,24 @@ export function Home() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  sheet: { marginTop: -30, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingTop: 18 },
+  sheet: { paddingTop: 4 },
   column: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 16, gap: 18 },
   list: { gap: 22, marginTop: 2 },
   clear: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 16 },
   clearText: { fontFamily: F.bold, fontSize: 14.5 },
-  compact: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden' },
+  compact: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    overflow: 'hidden',
+    shadowColor: '#0A0828',
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  frost: { opacity: 0.94 },
+  compactEdge: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, backgroundColor: 'rgba(255,255,255,0.12)' },
   scrim: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   compactRow: {
     width: '100%',

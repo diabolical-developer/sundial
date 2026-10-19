@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View, type NativeSyntheticEvent, type Text
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolation,
-  FadeIn,
+  FadeInDown,
   FadeOut,
   interpolate,
   LinearTransition,
@@ -18,7 +18,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { haptic } from '../haptics';
 import { useStore } from '../store';
 import { F, priorityRing, useTheme } from '../theme';
-import { dayLabel, duration, formatTime, minutesOf } from '../time';
+import { dayLabel, duration, formatTime, taskMinutes } from '../time';
 import type { Task } from '../types';
 import { Icon } from '../ui/Icon';
 import { EASE_OUT, SPRING } from '../ui/motion';
@@ -34,9 +34,11 @@ interface Props {
   nowMin: number;
   showDate?: boolean;
   last?: boolean;
+  /** Position in its section, for a staggered entrance. */
+  index?: number;
 }
 
-function TaskRowBase({ task, today, nowMin, showDate, last }: Props) {
+function TaskRowBase({ task, today, nowMin, showDate, last, index = 0 }: Props) {
   const t = useTheme();
   const { setDone, deleteTask } = useStore();
   const ui = useUI();
@@ -47,7 +49,7 @@ function TaskRowBase({ task, today, nowMin, showDate, last }: Props) {
   const late =
     !task.done &&
     task.date !== null &&
-    (task.date < today || (task.date === today && task.time !== null && minutesOf(task.time) < nowMin - 1));
+    (task.date < today || (task.date === today && task.time !== null && taskMinutes(task.time) < nowMin - 1));
 
   // --- tap the circle: tick, strike through, then hand over to the store
   const strike = useSharedValue(task.done ? 1 : 0);
@@ -136,6 +138,7 @@ function TaskRowBase({ task, today, nowMin, showDate, last }: Props) {
       node: <Text style={[styles.meta, { color: late ? t.ember : t.muted }]}>{dayLabel(task.date, today)}</Text>,
     });
   }
+  if (task.repeat) meta.push({ key: 'repeat', node: <Icon name="repeat" size={13} color={t.iris} /> });
   if (task.reminder && !task.done) meta.push({ key: 'bell', node: <Icon name="bell" size={13} color={t.muted} /> });
   if (task.notes) meta.push({ key: 'note', node: <Icon name="note" size={13} color={t.muted} /> });
   if (task.focusMinutes > 0) {
@@ -147,7 +150,10 @@ function TaskRowBase({ task, today, nowMin, showDate, last }: Props) {
 
   return (
     <Animated.View
-      entering={FadeIn.duration(260)}
+      entering={FadeInDown.delay(Math.min(index, 8) * 45)
+        .springify()
+        .damping(20)
+        .stiffness(180)}
       exiting={FadeOut.duration(160)}
       layout={LinearTransition.springify().damping(22).stiffness(200)}
       onLayout={(e) => {

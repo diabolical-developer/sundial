@@ -1,4 +1,4 @@
-import { BUCKETS, bucketOf, keyOf, minutesOf, type Bucket } from './time';
+import { addDays, BUCKETS, bucketOf, dayKeyOf, taskMinutes, type Bucket } from './time';
 import type { Task } from './types';
 
 const RANK = { high: 0, normal: 1, low: 2 } as const;
@@ -8,7 +8,7 @@ export function byTime(a: Task, b: Task) {
   if (a.time !== b.time) {
     if (a.time === null) return 1;
     if (b.time === null) return -1;
-    return minutesOf(a.time) - minutesOf(b.time);
+    return taskMinutes(a.time) - taskMinutes(b.time);
   }
   return RANK[a.priority] - RANK[b.priority] || a.createdAt - b.createdAt;
 }
@@ -55,7 +55,7 @@ export function doneView(tasks: Task[]): Map<string, Task[]> {
   const done = tasks.filter((t) => t.done).sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0));
   const groups = new Map<string, Task[]>();
   for (const t of done) {
-    const day = keyOf(new Date(t.completedAt ?? t.createdAt));
+    const day = dayKeyOf(new Date(t.completedAt ?? t.createdAt));
     groups.set(day, [...(groups.get(day) ?? []), t]);
   }
   return groups;
@@ -65,4 +65,16 @@ export function doneView(tasks: Task[]): Map<string, Task[]> {
 export function nextUp(tasks: Task[], today: string): Task | null {
   const { open, slipped } = todayView(tasks, today);
   return open[0] ?? slipped[0] ?? null;
+}
+
+/** Consecutive cleared days ending today (or yesterday, if today isn't cleared yet). */
+export function streakOf(clearedDays: string[], today: string) {
+  const days = new Set(clearedDays);
+  let d = days.has(today) ? today : addDays(today, -1);
+  let n = 0;
+  while (days.has(d)) {
+    n += 1;
+    d = addDays(d, -1);
+  }
+  return n;
 }

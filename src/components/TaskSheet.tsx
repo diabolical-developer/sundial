@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { haptic } from '../haptics';
 import { useStore } from '../store';
 import { F, useTheme } from '../theme';
-import { addDays, dayLabel, duration, keyOf } from '../time';
+import { addDays, dayLabel, duration, dayKeyOf } from '../time';
 import type { Task } from '../types';
 import { Icon, type IconName } from '../ui/Icon';
 import { PressableScale } from '../ui/PressableScale';
@@ -119,7 +119,7 @@ export function TaskSheet({ taskId, onClose }: Props) {
       />
 
       <ScheduleFields
-        value={{ date: task.date, time: task.time, priority: task.priority, reminder: task.reminder }}
+        value={{ date: task.date, time: task.time, priority: task.priority, reminder: task.reminder, repeat: task.repeat ?? null }}
         onChange={(p) => updateTask(task.id, p)}
         today={today}
       />
@@ -135,7 +135,7 @@ export function TaskSheet({ taskId, onClose }: Props) {
           >
             <Icon name={a.icon} size={18} color={a.tone === 'danger' ? t.ember : t.ink} />
             <Text style={[styles.actionText, { color: a.tone === 'danger' ? t.ember : t.ink }]}>
-              {a.label === 'Tomorrow' || a.label === 'Today' ? `Move to ${a.label.toLowerCase()}` : a.label}
+              {a.label}
             </Text>
           </PressableScale>
         ))}
@@ -157,7 +157,7 @@ export function TaskSheet({ taskId, onClose }: Props) {
       </PressableScale>
 
       <Text style={[styles.footer, { color: t.faint }]}>
-        Added {dayLabel(keyOf(new Date(task.createdAt)), today).replace(/^(Today|Yesterday|Tomorrow)$/, (m) => m.toLowerCase())}
+        Added {dayLabel(dayKeyOf(new Date(task.createdAt)), today).replace(/^(Today|Yesterday|Tomorrow)$/, (m) => m.toLowerCase())}
         {task.focusMinutes > 0 ? `. ${duration(task.focusMinutes)} of focus so far.` : '.'}
       </Text>
     </TopSheet>

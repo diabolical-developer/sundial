@@ -2,6 +2,9 @@ export type Priority = 'low' | 'normal' | 'high';
 
 export type Tab = 'today' | 'upcoming' | 'done';
 
+/** How a task comes back after it's done. */
+export type Repeat = 'daily' | 'weekdays' | 'weekly';
+
 export interface Task {
   id: string;
   title: string;
@@ -15,6 +18,9 @@ export interface Task {
   reminder: boolean;
   notificationId: string | null;
   focusMinutes: number;
+  /** Repeating tasks: the rule, and the id shared by every occurrence. */
+  repeat?: Repeat | null;
+  seriesId?: string | null;
   createdAt: number;
   completedAt: number | null;
 }
@@ -24,6 +30,14 @@ export interface Settings {
   onboarded: boolean;
   /** Days on which every task planned for that day was finished. */
   clearedDays: string[];
+  /** What each day looked like, kept even after finished tasks are cleared (for the calendar). */
+  history?: Record<string, DayRecord>;
+}
+
+export interface DayRecord {
+  planned: number;
+  done: number;
+  focus: number;
 }
 
 export interface Schedule {
@@ -31,4 +45,5 @@ export interface Schedule {
   time: string | null;
   priority: Priority;
   reminder: boolean;
+  repeat?: Repeat | null;
 }

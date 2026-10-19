@@ -2,7 +2,8 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 export type IconName =
   | 'plus' | 'check' | 'x' | 'bell' | 'play' | 'pause' | 'trash' | 'clock' | 'undo' | 'focus'
-  | 'sun' | 'moon' | 'calendar' | 'arrowUp' | 'reset' | 'note' | 'chevronRight' | 'minus';
+  | 'sun' | 'moon' | 'calendar' | 'arrowUp' | 'reset' | 'note' | 'chevronRight' | 'chevronLeft' | 'minus'
+  | 'repeat' | 'flame';
 
 interface Props {
   name: IconName;
@@ -65,6 +66,9 @@ export function Icon({ name, size = 20, color, strokeWidth = 2 }: Props) {
       {name === 'reset' && <Path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1L3.5 8.5M3.5 3.5v5h5" {...s} />}
       {name === 'note' && <Path d="M5 5h14M5 10h14M5 15h9" {...s} />}
       {name === 'chevronRight' && <Path d="m9.5 6 6 6-6 6" {...s} />}
+      {name === 'chevronLeft' && <Path d="m14.5 6-6 6 6 6" {...s} />}
+      {name === 'repeat' && <Path d="M17 2.5 20.5 6 17 9.5M3.5 11.5V10a4 4 0 0 1 4-4h13M7 21.5 3.5 18 7 14.5M20.5 12.5V14a4 4 0 0 1-4 4h-13" {...s} />}
+      {name === 'flame' && <Path d="M12 21.5c3.9 0 7-2.8 7-6.7 0-4.3-3.3-6.6-4.6-10.3-.2-.6-1-.8-1.4-.3-1.1 1.4-1.4 3.4-1 5.1-1.2-.6-2.1-1.6-2.5-2.8-.2-.6-1-.7-1.3-.2C6.5 8.3 5 10.9 5 14.8c0 3.9 3.1 6.7 7 6.7Z" {...s} />}
     </Svg>
   );
 }

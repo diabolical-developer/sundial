@@ -2,7 +2,7 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import type * as NotificationsModule from 'expo-notifications';
 import { Platform } from 'react-native';
 
-import { dateOf, minutesOf } from './time';
+import { dateOf, taskMinutes } from './time';
 import type { Task } from './types';
 
 const CHANNEL = 'sundial-reminders';
@@ -65,7 +65,8 @@ export async function ensureReminderPermission(): Promise<boolean> {
 export function reminderDate(task: Pick<Task, 'date' | 'time'>): Date | null {
   if (!task.date) return null;
   const d = dateOf(task.date);
-  const m = task.time ? minutesOf(task.time) : 9 * 60;
+  // Late-night times (before 4 am) fall on the next calendar day; setHours rolls over past 24.
+  const m = task.time ? taskMinutes(task.time) : 9 * 60;
   d.setHours(Math.floor(m / 60), m % 60, 0, 0);
   return d;
 }

@@ -1,13 +1,18 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState, Platform } from 'react-native';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { haptic } from './haptics';
 import { cancelReminder, remindersSupported, scheduleReminder } from './reminders';
-import { addDays, keyOf } from './time';
-import type { Priority, Settings, Task } from './types';
+import { addDays, dayKeyOf } from './time';
+import { reconcileSeries } from './repeat';
+import { streakOf } from './select';
+import { readSnapshot, STORAGE_KEY, writeSnapshot } from './snapshot';
+import { refreshWidgets } from './widget/refresh';
+import type { DayRecord, Priority, Repeat, Settings, Task } from './types';
 import { useNow } from './useNow';
 
-const KEY = 'sundial/v2';
+const KEY = STORAGE_KEY;
 const LEGACY_KEY = 'todo-app/tasks/v1';
 
 export interface NewTask {
@@ -17,6 +22,7 @@ export interface NewTask {
   priority: Priority;
   reminder: boolean;
   notes?: string;
+  repeat?: Repeat | null;
 }
 
 interface Toast {
@@ -103,7 +109,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<Toast | null>(null);
   const [celebration, setCelebration] = useState(0);
   const now = useNow(60_000);
-  const today = keyOf(now);
+  const today = dayKeyOf(now);
 
   // Actions read and write through refs so they stay stable and side effects run once.
   const tasksRef = useRef(tasks);
@@ -125,29 +131,86 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Save (debounced).
+  // Save (debounced), and right away if the app is backgrounded or the page closes mid-wait.
+  const pending = useRef<(() => void) | null>(null);
+  const lastSaved = useRef(0);
   useEffect(() => {
     if (!loaded) return;
-    const id = setTimeout(() => {
-      AsyncStorage.setItem(KEY, JSON.stringify({ v: 2, tasks, settings })).catch(() => {});
-    }, 250);
+    const save = () => {
+      pending.current = null;
+      writeSnapshot({ tasks, settings, by: 'app' })
+        .then((at) => {
+          lastSaved.current = at;
+          refreshWidgets();
+        })
+        .catch(() => {});
+    };
+    pending.current = save;
+    const id = setTimeout(save, 250);
     return () => clearTimeout(id);
   }, [tasks, settings, loaded]);
+  useEffect(() => {
+    const flush = () => pending.current?.();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') {
+        flush();
+        return;
+      }
+      // Back in the app: take in anything ticked off on the home-screen widget meanwhile.
+      readSnapshot().then((snap) => {
+        if (!snap || snap.by !== 'widget' || (snap.savedAt ?? 0) <= lastSaved.current) return;
+        lastSaved.current = snap.savedAt ?? 0;
+        tasksRef.current = snap.tasks;
+        settingsRef.current = { ...DEFAULT_SETTINGS, ...snap.settings };
+        setTasks(snap.tasks);
+        setSettings(settingsRef.current);
+      });
+    });
+    const web = Platform.OS === 'web' ? (globalThis as unknown as { addEventListener?: (e: string, f: () => void) => void; removeEventListener?: (e: string, f: () => void) => void }) : null;
+    web?.addEventListener?.('pagehide', flush);
+    return () => {
+      sub.remove();
+      web?.removeEventListener?.('pagehide', flush);
+    };
+  }, []);
 
-  // Keep "cleared days" in step with today's list (for the streak).
+  // Keep "cleared days" and the day's record in step with today's list (for the streak and calendar).
   useEffect(() => {
     if (!loaded) return;
     const todays = tasks.filter((t) => t.date === today);
-    const cleared = todays.length > 0 && todays.every((t) => t.done);
+    const doneCount = todays.filter((t) => t.done).length;
+    const cleared = todays.length > 0 && doneCount === todays.length;
     const has = settings.clearedDays.includes(today);
-    if (cleared !== has) {
-      const days = cleared
-        ? [...settings.clearedDays, today].slice(-400)
-        : settings.clearedDays.filter((d) => d !== today);
-      settingsRef.current = { ...settingsRef.current, clearedDays: days };
+    let history = settings.history;
+    if (!history) {
+      // First run with the calendar: rebuild past days from the tasks we still have.
+      history = {};
+      for (const t of tasks) {
+        if (!t.date || t.date > today) continue;
+        const r = history[t.date] ?? { planned: 0, done: 0, focus: 0 };
+        history[t.date] = { planned: r.planned + 1, done: r.done + (t.done ? 1 : 0), focus: r.focus + t.focusMinutes };
+      }
+    }
+    const rec = history[today];
+    const recChanged = !rec || rec.planned !== todays.length || rec.done !== doneCount;
+    if (cleared !== has || recChanged || history !== settings.history) {
+      const days =
+        cleared === has ? settings.clearedDays : cleared ? [...settings.clearedDays, today].slice(-400) : settings.clearedDays.filter((d) => d !== today);
+      const nextHistory: Record<string, DayRecord> = {
+        ...history,
+        [today]: { planned: todays.length, done: doneCount, focus: rec?.focus ?? 0 },
+      };
+      settingsRef.current = { ...settingsRef.current, clearedDays: days, history: nextHistory };
       setSettings(settingsRef.current);
     }
-  }, [tasks, today, loaded, settings.clearedDays]);
+  }, [tasks, today, loaded, settings.clearedDays, settings.history]);
+
+  // Repeating tasks: keep one open occurrence per series, on its next due day.
+  useEffect(() => {
+    if (!loaded) return;
+    const next = reconcileSeries(tasks, today, newId);
+    if (next) commit(next);
+  }, [tasks, today, loaded, commit]);
 
   // Schedule / cancel reminders whenever a task's timing changes.
   const reminderMeta = useRef(new Map<string, { sig: string; nid: string | null }>());
@@ -205,9 +268,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         reminder: input.reminder,
         notificationId: null,
         focusMinutes: 0,
+        repeat: input.repeat ?? null,
+        seriesId: null,
         createdAt: Date.now(),
         completedAt: null,
       };
+      if (task.repeat) task.seriesId = task.id;
       commit([task, ...tasksRef.current]);
       return task;
     },
@@ -216,7 +282,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const updateTask = useCallback(
     (id: string, patch: Partial<Task>) => {
-      commit(tasksRef.current.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+      commit(
+        tasksRef.current.map((t) => {
+          if (t.id !== id) return t;
+          const next = { ...t, ...patch };
+          // Turning on repeat starts a series; turning it off ends it here.
+          if (next.repeat && !next.seriesId) next.seriesId = next.id;
+          return next;
+        }),
+      );
     },
     [commit],
   );
@@ -253,8 +327,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const index = prev.findIndex((t) => t.id === id);
       if (index < 0) return;
       const removed = prev[index];
-      commit(prev.filter((t) => t.id !== id));
-      showToast('Task deleted', () => {
+      // Deleting a repeating task stops the series (finished occurrences stay as history).
+      const series = removed.seriesId && !removed.done ? removed.seriesId : null;
+      commit(prev.filter((t) => t.id !== id).map((t) => (series && t.seriesId === series ? { ...t, repeat: null } : t)));
+      showToast(series ? 'Repeating task deleted' : 'Task deleted', () => {
         const list = [...tasksRef.current];
         list.splice(Math.min(index, list.length), 0, { ...removed, notificationId: null });
         commit(list);
@@ -285,6 +361,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const logFocus = useCallback(
     (id: string, minutes: number) => {
       commit(tasksRef.current.map((t) => (t.id === id ? { ...t, focusMinutes: t.focusMinutes + minutes } : t)));
+      const day = todayRef.current;
+      const history = settingsRef.current.history ?? {};
+      const rec = history[day] ?? { planned: 0, done: 0, focus: 0 };
+      settingsRef.current = { ...settingsRef.current, history: { ...history, [day]: { ...rec, focus: rec.focus + minutes } } };
+      setSettings(settingsRef.current);
     },
     [commit],
   );
@@ -294,16 +375,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setSettings(settingsRef.current);
   }, []);
 
-  const streak = useMemo(() => {
-    const days = new Set(settings.clearedDays);
-    let d = days.has(today) ? today : addDays(today, -1);
-    let n = 0;
-    while (days.has(d)) {
-      n += 1;
-      d = addDays(d, -1);
-    }
-    return n;
-  }, [settings.clearedDays, today]);
+  const streak = useMemo(() => streakOf(settings.clearedDays, today), [settings.clearedDays, today]);
 
   const value = useMemo<Store>(
     () => ({

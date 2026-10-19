@@ -15,7 +15,8 @@
       "package": "com.sid.todo",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#2E2B6E"
+        "backgroundImage": "./assets/adaptive-icon-background.png",
+        "backgroundColor": "#2E1A5E"
       }
     },
     "web": {
@@ -31,7 +32,46 @@
         {
           "color": "#FFC21A"
         }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "fonts": [
+            "./node_modules/@expo-google-fonts/bricolage-grotesque/800ExtraBold/BricolageGrotesque_800ExtraBold.ttf",
+            "./node_modules/@expo-google-fonts/figtree/600SemiBold/Figtree_600SemiBold.ttf",
+            "./node_modules/@expo-google-fonts/figtree/700Bold/Figtree_700Bold.ttf"
+          ],
+          "widgets": [
+            {
+              "name": "SundialToday",
+              "label": "Sundial: Today",
+              "description": "Today’s sky, your progress and what’s next. Tick tasks off right here.",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "420dp",
+              "maxResizeHeight": "480dp",
+              "resizeMode": "horizontal|vertical",
+              "previewImage": "./assets/widget-today-preview.png",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "SundialStreak",
+              "label": "Sundial: Streak",
+              "description": "Your streak of clear days, ringed by today’s progress.",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "none",
+              "previewImage": "./assets/widget-streak-preview.png",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
       ]
-    ]
+    ],
+    "scheme": "sundial"
   }
 }

@@ -6,7 +6,8 @@ import { haptic } from '../haptics';
 import { remindersSupported } from '../reminders';
 import { F, useTheme, type Theme } from '../theme';
 import { addDays, dateOf, dayLabel, formatTime, minutesOf, toTime, weekdayShort } from '../time';
-import type { Priority, Schedule } from '../types';
+import { REPEAT_LABEL } from '../repeat';
+import type { Priority, Repeat, Schedule } from '../types';
 import { Icon } from '../ui/Icon';
 import { SPRING } from '../ui/motion';
 
@@ -17,12 +18,20 @@ const TIMES: { label: string; value: string | null }[] = [
   { label: 'Afternoon', value: '15:00' },
   { label: 'Evening', value: '18:00' },
   { label: 'Night', value: '21:00' },
+  { label: 'Late night', value: '23:30' },
 ];
 
 const PRIORITIES: { key: Priority; label: string }[] = [
   { key: 'low', label: 'Low' },
   { key: 'normal', label: 'Normal' },
   { key: 'high', label: 'High' },
+];
+
+const REPEATS: { key: Repeat | null; label: string }[] = [
+  { key: null, label: 'Never' },
+  { key: 'daily', label: 'Daily' },
+  { key: 'weekdays', label: 'Weekdays' },
+  { key: 'weekly', label: 'Weekly' },
 ];
 
 interface Props {
@@ -160,6 +169,33 @@ export function ScheduleFields({ value, onChange, today }: Props) {
         </View>
       </View>
 
+      {value.date && (
+        <View style={styles.group}>
+          <Label
+            t={t}
+            text="Repeat"
+            value={!value.repeat ? 'Never' : value.repeat === 'weekly' ? `Every ${weekdayShort(value.date)}` : REPEAT_LABEL[value.repeat]}
+          />
+          <View style={[styles.segment, { backgroundColor: t.bg }]}>
+            {REPEATS.map((r) => {
+              const active = (value.repeat ?? null) === r.key;
+              return (
+                <Pressable
+                  key={r.label}
+                  onPress={() => set({ repeat: r.key })}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  style={[styles.segBtn, active && { backgroundColor: t.card, borderColor: t.line }]}
+                >
+                  {r.key && <Icon name="repeat" size={13} color={active ? t.iris : t.faint} strokeWidth={2.4} />}
+                  <Text style={[styles.segText, { color: active ? t.ink : t.muted }]}>{r.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
       {remindersSupported && (
         <Pressable
           onPress={() => value.date && set({ reminder: !value.reminder })}
@@ -235,7 +271,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  segText: { fontFamily: F.bold, fontSize: 13.5 },
+  segText: { fontFamily: F.bold, fontSize: 13 },
   remind: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 18, padding: 14 },
   remindTitle: { fontFamily: F.bold, fontSize: 15 },
   remindSub: { fontFamily: F.medium, fontSize: 13, marginTop: 1 },

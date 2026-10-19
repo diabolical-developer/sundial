@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOutDown, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useStore } from '../store';
@@ -10,17 +10,33 @@ import { Icon } from '../ui/Icon';
 export function Toast() {
   const { toast, dismissToast } = useStore();
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { bottom: insets.bottom + 96 }]}>
       {toast && (
       <Animated.View
         key={toast.id}
-        entering={FadeInDown.springify().damping(18)}
+        entering={FadeInDown.springify().damping(16).stiffness(200)}
         exiting={FadeOutDown.duration(180)}
         style={styles.toast}
         accessibilityLiveRegion="polite"
         accessibilityRole="alert"
       >
+        {/* Drains over the time the toast stays up (4.2 s in the store). */}
+        <View style={styles.timer} pointerEvents="none">
+          <Animated.View
+            style={[
+              styles.timerFill,
+              !reduceMotion &&
+                ({
+                  animationName: { from: { transform: [{ scaleX: 1 }] }, to: { transform: [{ scaleX: 0 }] } },
+                  animationDuration: '4200ms',
+                  animationTimingFunction: 'linear',
+                  animationFillMode: 'forwards',
+                } as object),
+            ]}
+          />
+        </View>
         <Text style={styles.text}>{toast.message}</Text>
         {toast.undo && (
           <Pressable
@@ -53,13 +69,17 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingLeft: 18,
     paddingRight: 14,
-    paddingVertical: 13,
+    paddingVertical: 14,
     shadowColor: '#0A0828',
     shadowOpacity: 0.3,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
     elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
+  timer: { position: 'absolute', left: 18, right: 18, bottom: 5, height: 2, borderRadius: 1, overflow: 'hidden' },
+  timerFill: { flex: 1, backgroundColor: '#FFD65A', opacity: 0.85, transformOrigin: 'left' },
   text: { fontFamily: F.semi, fontSize: 14.5, color: '#FFFFFF', flexShrink: 1 },
   undo: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   undoText: { fontFamily: F.bold, fontSize: 14.5, color: '#FFD65A' },

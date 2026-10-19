@@ -1,8 +1,10 @@
-import { addDays, dayLabel, formatTime, keyOf, toTime } from './time';
-import type { Priority } from './types';
+import { addDays, dayKeyOf, dayLabel, formatTime, toTime } from './time';
+import { clockNow } from './useNow';
+import { nextDue, REPEAT_LABEL } from './repeat';
+import type { Priority, Repeat } from './types';
 
 export interface ParsedToken {
-  kind: 'date' | 'time' | 'priority';
+  kind: 'date' | 'time' | 'priority' | 'repeat';
   label: string;
 }
 
@@ -12,6 +14,7 @@ export interface Parsed {
   date?: string | null;
   time?: string;
   priority?: Priority;
+  repeat?: Repeat;
   tokens: ParsedToken[];
 }
 
@@ -40,8 +43,8 @@ function toMinutes(hour: number, minute: number, meridiem?: string, bare = false
  * Reads dates, times and priority out of a quick-add sentence:
  * "Call mom tomorrow at 6pm !" → title "Call mom", tomorrow, 18:00, high priority.
  */
-export function parseQuickAdd(input: string, now = new Date()): Parsed {
-  const today = keyOf(now);
+export function parseQuickAdd(input: string, now = clockNow()): Parsed {
+  const today = dayKeyOf(now);
   let text = ` ${input} `;
   const result: Parsed = { title: '', tokens: [] };
 
@@ -60,6 +63,28 @@ export function parseQuickAdd(input: string, now = new Date()): Parsed {
     result.tokens.push({ kind: 'priority', label: p === 'high' ? 'High priority' : 'Low priority' });
     return true;
   });
+
+  // Repeats: "every day", "weekdays", "every friday", "weekly"
+  const setRepeat = (rule: Repeat, weekday?: number) => {
+    result.repeat = rule;
+    result.tokens.push({ kind: 'repeat', label: weekday === undefined ? REPEAT_LABEL[rule] : `Every ${DAY_NAMES[weekday].slice(0, 3)}` });
+    return true;
+  };
+  let repeatDay: string | undefined;
+  void (
+    take(/\b(?:every\s*day|each day|daily)\b/i, () => setRepeat('daily')) ||
+    take(/\b(?:(?:every|on)\s+)?week\s?days\b|\bevery weekday\b/i, () => {
+      repeatDay = nextDue('weekdays', today, today);
+      return setRepeat('weekdays');
+    }) ||
+    take(new RegExp(`\\bevery\\s+(${DAY_NAMES.join('|')}|sun|mon|tues|tue|wed|thurs|thur|thu|fri|sat)\\b`, 'i'), (m) => {
+      const w = m[1].toLowerCase();
+      const target = DAY_NAMES.includes(w) ? DAY_NAMES.indexOf(w) : DAY_ABBR[w];
+      repeatDay = addDays(today, (target - now.getDay() + 7) % 7);
+      return setRepeat('weekly', target);
+    }) ||
+    take(/\b(?:weekly|every week)\b/i, () => setRepeat('weekly'))
+  );
 
   // Dates
   let tonight = false;
@@ -92,7 +117,7 @@ export function parseQuickAdd(input: string, now = new Date()): Parsed {
       return setDate(addDays(today, delta));
     }) ||
     take(/\b(someday|sometime)\b/i, () => setDate(null));
-  void dateFound;
+  if (!dateFound && repeatDay) result.date = repeatDay;
 
   // Times
   const setTime = (minutes: number | null) => {
@@ -124,6 +149,7 @@ export function parseQuickAdd(input: string, now = new Date()): Parsed {
       setTime(toMinutes(Number(m[1]), 0, undefined, true)),
     ) ||
     take(/\b(?:at\s+)?(noon|midday)\b/i, () => setTime(12 * 60)) ||
+    take(/\b(?:at\s+)?midnight\b/i, () => setTime(0)) ||
     take(/\b(?:in the |this )?(morning|afternoon|evening)\b/i, (m) =>
       setTime({ morning: 9, afternoon: 14, evening: 18 }[m[1].toLowerCase() as 'morning'] * 60),
     );
@@ -138,7 +164,7 @@ export function parseQuickAdd(input: string, now = new Date()): Parsed {
     .trim();
 
   // Keep tokens in a predictable reading order.
-  const order = { date: 0, time: 1, priority: 2 } as const;
+  const order = { date: 0, repeat: 1, time: 2, priority: 3 } as const;
   result.tokens.sort((a, b) => order[a.kind] - order[b.kind]);
   return result;
 }

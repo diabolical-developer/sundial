@@ -1,11 +1,28 @@
 import { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
+
+/**
+ * Dev-only: open the web build with `?at=14:30` to preview the sky at another time of day.
+ * Shifts the clock that drives the sky; task dates are unaffected.
+ */
+const OFFSET_MS = (() => {
+  if (!__DEV__ || Platform.OS !== 'web') return 0;
+  const m = /[?&]at=(\d{1,2}):(\d{2})/.exec((globalThis as { location?: { search: string } }).location?.search ?? '');
+  if (!m) return 0;
+  const target = new Date();
+  target.setHours(Number(m[1]), Number(m[2]), 0, 0);
+  return target.getTime() - Date.now();
+})();
+
+/** The app's clock. Use this rather than `new Date()` so every part of the app agrees on "now". */
+export const clockNow = () => new Date(Date.now() + OFFSET_MS);
 
 /** The current time, refreshed every `intervalMs` (aligned to the clock). */
 export function useNow(intervalMs = 30_000) {
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(clockNow);
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined;
-    const tick = () => setNow(new Date());
+    const tick = () => setNow(clockNow());
     const timeout = setTimeout(() => {
       tick();
       interval = setInterval(tick, intervalMs);

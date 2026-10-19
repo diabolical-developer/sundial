@@ -7,8 +7,10 @@ export interface UI {
   openTask: (id: string) => void;
   /** Start a focus session on a task. */
   focus: (id: string) => void;
+  /** Open the streak calendar. */
+  calendar: () => void;
 }
 
-export const UIContext = createContext<UI>({ compose: () => {}, openTask: () => {}, focus: () => {} });
+export const UIContext = createContext<UI>({ compose: () => {}, openTask: () => {}, focus: () => {}, calendar: () => {} });
 
 export const useUI = () => useContext(UIContext);
