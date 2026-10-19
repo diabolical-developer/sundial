@@ -72,6 +72,12 @@
         }
       ]
     ],
-    "scheme": "sundial"
+    "scheme": "sundial",
+    "extra": {
+      "eas": {
+        "projectId": "2122edc8-6412-43c1-bf56-4f757cc08f94"
+      }
+    },
+    "owner": "diabolical_developer"
   }
 }
