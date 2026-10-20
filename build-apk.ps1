@@ -19,7 +19,17 @@ function Run($exe, [string[]]$a) {
   if ($LASTEXITCODE -ne 0) { throw "$exe failed ($LASTEXITCODE)" }
 }
 
-$env:ANDROID_HOME = "$tools\sdk"
+# The NDK can't run from a path with spaces ("Important Projects"): CMake then calls clang++ by its
+# 8.3 short name and clang forgets it's linking C++. So the SDK is reached through a space-free
+# junction (a link, nothing is copied) in %LOCALAPPDATA%.
+$sdk = "$tools\sdk"
+if ($sdk -match ' ') {
+  $link = Join-Path $env:LOCALAPPDATA 'sundial-android-sdk'
+  if ($link -match ' ') { throw "Can't find a path without spaces for the Android SDK: $link" }
+  if (-not (Test-Path $link)) { cmd /c mklink /J "$link" "$sdk" | Out-Null }
+  $sdk = $link
+}
+$env:ANDROID_HOME = $sdk
 $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
 $env:GRADLE_USER_HOME = "$tools\gradle"
 $env:CI = '1'              # keeps the Expo CLI from asking questions
@@ -48,7 +58,12 @@ if (-not (Test-Path "$root\node_modules")) { Run 'npm' @('ci') }
 
 Write-Host '2/4 generating the Android project'
 $prebuild = @('expo', 'prebuild', '--platform', 'android', '--no-install')
-if ($Clean) { $prebuild += '--clean' }
+if ($Clean) {
+  $prebuild += '--clean'
+  # Drop cached native builds of the libraries too.
+  Get-ChildItem "$root\node_modules" -Directory -Recurse -Depth 3 -Filter '.cxx' -Force -ErrorAction SilentlyContinue |
+    Where-Object { $_.Parent.Name -eq 'android' } | Remove-Item -Recurse -Force
+}
 Run 'npx' $prebuild
 Set-Content "$root\android\local.properties" "sdk.dir=$($env:ANDROID_HOME -replace '\\', '/')"
 
