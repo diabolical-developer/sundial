@@ -4,8 +4,8 @@ A to-do app that lays your day out along the sun's path, so you always know what
 
 One Expo (React Native) codebase ships as:
 
-- **Android app**: run it in Expo Go while developing, or build an installable APK with EAS.
-- **iPhone web app**: a web build you add to the iPhone home screen. It opens full-screen with its own icon.
+- **Android app**: `Sundial.apk`, built on this PC with `build-apk.ps1` (like DrinkUp), and attached to each [GitHub release](https://github.com/diabolical-developer/sundial/releases).
+- **iPhone (and any browser) PWA**: **https://diabolical-developer.github.io/sundial/**. Add it to the home screen and it opens full-screen with its own icon, and works offline.
 
 ## What makes it different
 
@@ -35,25 +35,52 @@ npm start          # press "a" for Android (Expo Go), "w" for web
 | `npm run android` | Open on an Android device or emulator, or scan the QR code with Expo Go |
 | `npm run web` | Run the web version in your browser |
 | `npm run build:web` | Export the static web app to `dist/` |
-| `npm run build:apk` | Build an installable APK with EAS (`npm i -g eas-cli`, then `eas login` first) |
+| `npm run deploy:pwa` | Build the PWA and publish it to GitHub Pages (see [iPhone: the PWA](#iphone-the-pwa)) |
+| `npm run build:apk` | Build and sign `Sundial.apk` on this PC (see [Android APK](#android-apk)) |
+| `npm run build:apk:cloud` | Same APK, built on Expo's servers instead (needs `eas login`) |
 | `npm run typecheck` | TypeScript check |
 
 > Reminders need the installed app (the APK). Expo Go on Android can't schedule notifications, so the reminder switch is hidden there.
 
-## iPhone (web app)
+## Android APK
 
-1. `npm run build:web`, then deploy `dist/` to any HTTPS static host (Netlify, Vercel, Cloudflare Pages, GitHub Pages).
-2. Open the URL in Safari on the iPhone and tap **Share → Add to Home Screen**.
+```powershell
+.\build-apk.ps1            # or: npm run build:apk
+```
+
+Like DrinkUp's `build.ps1`, this builds everything on this PC with the Android SDK, NDK and Gradle kept in `.local-build\` (git-ignored), then signs the result with `.local-build\sundial-release.keystore` and writes **`Sundial.apk`** next to this README. The first build compiles native code and takes 15–25 minutes; later ones take a few minutes. Add `-AllAbis` for 32-bit phones and emulators, `-Clean` to regenerate the `android\` project.
+
+**Keep `sundial-release.keystore` and `signing.properties` backed up.** Updates must be signed with the same key, or Android refuses to install them over the existing app.
+
+## iPhone: the PWA
+
+The web build is a Progressive Web App, published to **https://diabolical-developer.github.io/sundial/** with:
+
+```powershell
+.\deploy-pwa.ps1           # or: npm run deploy:pwa   (-NoPush to only build it)
+```
+
+It builds the web app for the `/sundial/` path and pushes it to the `gh-pages` branch, which GitHub Pages serves. Run it whenever you want the live PWA to catch up with your changes.
+
+On iPhone: open the link in **Safari** → tap **Share** → **Add to Home Screen**. The app shows a small card with these steps the first time. On Android Chrome and desktop Chrome/Edge it offers an **Install** button instead.
+
+- `public/manifest.json`: name, icons, colours, full-screen display.
+- `public/sw.js`: service worker. The app opens offline; tasks are kept in the browser's storage on that device.
+- `app.config.js`: sets the `/sundial` base path for the Pages build (the `EXPO_BASE_URL` variable); everything else builds at `/`.
+
+To try the Pages build locally: `$env:EXPO_BASE_URL='/sundial'; npx expo export -p web`.
+
+Reminders and widgets need the Android app; iPhone users get everything else.
 
 ## Android widgets
 
 Widgets are native, so they only exist in an installed build (not Expo Go and not the web app):
 
-```bash
-npm run build:apk
+```powershell
+.\build-apk.ps1
 ```
 
-Install the APK, then long-press the home screen → **Widgets** → **Sundial**. The widgets redraw whenever the app changes something, and every 30 minutes on their own so the sun keeps moving. Ticks made on the widget are picked up the next time the app opens. Widget code lives in `src/widget/` (built with [react-native-android-widget](https://github.com/sAleksovski/react-native-android-widget)); taps open the app through `sundial://add`, `sundial://task/<id>` and `sundial://calendar`.
+Install `Sundial.apk`, then long-press the home screen → **Widgets** → **Sundial**. The widgets redraw whenever the app changes something, and every 30 minutes on their own so the sun keeps moving. Ticks made on the widget are picked up the next time the app opens. Widget code lives in `src/widget/` (built with [react-native-android-widget](https://github.com/sAleksovski/react-native-android-widget)); taps open the app through `sundial://add`, `sundial://task/<id>` and `sundial://calendar`.
 
 ## Previewing other times of day
 

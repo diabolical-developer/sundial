@@ -11,3 +11,7 @@ ios/
 .env.local
 .DS_Store
 Thumbs.db
+.local-build/
+artifacts/
+Sundial.apk
+*.idsig
